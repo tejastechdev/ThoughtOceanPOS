@@ -119,8 +119,12 @@ class TestUberEatsIntake(UberEatsCase):
         self.assertEqual(len(order.lines), 2)
         pizza_line = order.lines.filtered(lambda l: l.product_id == self.pizza)
         self.assertEqual(len(pizza_line), 1, "matched by internal reference")
-        self.assertAlmostEqual(pizza_line.price_subtotal_incl, 12.0, 2, "Uber gross price kept, tax backed out")
-        self.assertAlmostEqual(pizza_line.price_subtotal, 12.0 / 1.1, 2)
+        self.assertAlmostEqual(pizza_line.price_subtotal_incl, 12.0, 2, "Uber gross price kept")
+        self.assertAlmostEqual(pizza_line.price_subtotal, 12.0 / 1.1, 2, "GST backed out of the gross price")
+        self.assertAlmostEqual(pizza_line.price_unit, 12.0, 2, "priced tax-inclusive at two decimals")
+        self.assertEqual(pizza_line.tax_ids, self.tax.uber_eats_included_tax_id, "tax-included twin of the product tax")
+        self.assertTrue(pizza_line.tax_ids.price_include)
+        self.assertEqual(pizza_line.tax_ids.amount, 10)
         self.assertIn("Well done", pizza_line.customer_note)
         self.assertIn("Extra chilli", pizza_line.customer_note)
         other = order.lines - pizza_line
@@ -201,6 +205,30 @@ class TestUberEatsIntake(UberEatsCase):
         line = record.pos_order_id.lines.filtered(lambda l: l.product_id == self.pizza)
         self.assertAlmostEqual(line.price_unit, 12.0, 2)
         self.assertAlmostEqual(line.price_subtotal_incl, 12.0, 2)
+
+    def test_line_totals_match_uber_to_the_cent(self):
+        # 32.50 for qty 2 with 10% tax backed out per unit rounds to 32.51 (server) / 32.49 (POS screen);
+        # tax-inclusive pricing keeps everyone at 32.50
+        items = [{
+            "id": "item-pizza", "title": "Margherita Pizza", "external_data": "PIZ-MARG", "quantity": 2,
+            "price": {"unit_price": {"amount": 1625}, "total_price": {"amount": 3250}},
+        }, {
+            "id": "item-x", "title": "Odd priced item", "external_data": "", "quantity": 3,
+            "price": {"unit_price": {"amount": 1111}, "total_price": {"amount": 3333}},
+        }]
+        record, _ = self._receive(sample_order(items=items))
+        self.assertEqual(record.state, "accepted", record.error_message)
+        order = record.pos_order_id
+        totals = sorted(round(l.price_subtotal_incl, 2) for l in order.lines)
+        self.assertEqual(totals, [32.5, 33.33])
+        units = sorted(round(l.price_unit, 4) for l in order.lines)
+        self.assertEqual(units, [11.11, 16.25], "unit prices are whole cents so the POS screen computes the same totals")
+        self.assertTrue(all(t.price_include for t in order.lines.tax_ids))
+        self.assertEqual(self.tax.uber_eats_included_tax_id.uber_eats_included_tax_id, self.env["account.tax"],
+                         "twin is created once and not chained")
+        self.assertAlmostEqual(order.amount_total, 65.83, 2)
+        self.assertAlmostEqual(order.amount_paid, 65.83, 2)
+        self.assertAlmostEqual(record.amount_uber, record.amount_pos, 2)
 
     def test_test_order_button(self):
         action = self.env["uber.eats.order"].action_create_test_order()

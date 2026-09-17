@@ -337,8 +337,17 @@ class UberEatsOrder(models.Model):
         taxes = product.taxes_id.filtered(lambda t: t.company_id == config.company_id)
         if fiscal_position:
             taxes = fiscal_position.map_tax(taxes)
-        price_unit = self._price_unit_for(taxes, gross, qty)
-        amounts = taxes.compute_all(price_unit, config.currency_id, qty, product=product, partner=partner)
+        # Uber prices are gross (GST included in Australia): price the line
+        # tax-inclusive so unit prices stay at two decimals and the POS screen,
+        # the server and Uber all agree to the cent.
+        taxes = taxes._uber_eats_included_set()
+        currency = config.currency_id
+        qty = qty or 1.0
+        price_unit = currency.round(gross / qty)
+        amounts = taxes.compute_all(price_unit, currency, qty, product=product, partner=partner)
+        if currency.compare_amounts(amounts["total_included"], gross) != 0:
+            _logger.warning("Uber Eats line '%s': gross %.2f for qty %s is not a whole number of cents per unit; "
+                            "POS line total is %.2f", title, gross, qty, amounts["total_included"])
         return {
             "product_id": product.id,
             "full_product_name": title or product.display_name,
@@ -351,16 +360,6 @@ class UberEatsOrder(models.Model):
             "customer_note": note or False,
             "uuid": str(uuid.uuid4()),
         }
-
-    @api.model
-    def _price_unit_for(self, taxes, gross, qty):
-        """Unit price such that the line's tax-inclusive total equals Uber's
-        (Uber Eats prices in Australia include GST)."""
-        qty = qty or 1.0
-        excluded = taxes.filtered(lambda t: not t.price_include and t.amount_type == "percent")
-        if not taxes or not excluded:
-            return gross / qty
-        return gross / qty / (1 + sum(excluded.mapped("amount")) / 100.0)
 
     def _match_product(self, config, item, allow_fallback=True):
         Product = self.env["product.product"]

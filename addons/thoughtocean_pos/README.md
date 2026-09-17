@@ -36,9 +36,13 @@ open the order is denied on Uber (reason *store closed*) unless
 POS by Internal Reference = Uber `external_data`, then by the product's
 *Uber Eats item ID* field, then by exact name; otherwise the point of sale's
 fallback product ("Uber Eats item") is used with the Uber title on the line.
-Prices come from Uber and are treated as GST-inclusive; modifiers that map to a
-product become their own line, others are folded into the parent line's price
-and noted.
+Prices come from Uber and are GST-inclusive, so lines are priced tax-inclusive:
+each product tax is swapped for an automatically created tax-included twin
+("10% GST (Uber Eats, tax incl.)", same rate). That keeps unit prices at whole
+cents, which is what makes the POS screen, the server and Uber agree to the
+cent (the POS front end rounds unit prices to cents before applying tax).
+Modifiers that map to a product become their own line, others are folded into
+the parent line's price and noted.
 
 **Setup**
 
