@@ -14,6 +14,8 @@ cd "$(dirname "$0")/.."
 
 DB="${ODOO_DB:-thoughtocean}"
 MODULES="pos_restaurant,l10n_au"
+COMPANY="${ODOO_COMPANY:-Maan's Pizza Shop}"
+COUNTRY="${ODOO_COUNTRY:-AU}"
 
 if [ ! -f .env ] && [ -f .env.example ]; then
   echo ">> No .env found, copying .env.example"
@@ -38,13 +40,35 @@ else
   echo ">> Creating database '${DB}' and installing ${MODULES}"
 fi
 
-# Odoo creates the database if it does not exist. Run as a one-off container so
-# it does not fight the long-running server for the same DB during init.
+# Odoo creates the database if it does not exist. Run as one-off containers so
+# they do not fight the long-running server for the same DB during init.
+#
+# Step 1: create the database with only "base", then set the company's name and
+# country. Doing this BEFORE the accounting modules install makes Odoo pick the
+# matching localisation (chart of accounts, currency, taxes) automatically, so
+# no chart migration is ever needed later.
+docker compose run --rm -T odoo \
+  odoo -c /etc/odoo/odoo.conf \
+       -d "${DB}" \
+       -i base \
+       --load-language=en_AU \
+       --without-demo=all \
+       --stop-after-init
+
+docker compose run --rm -T odoo \
+  odoo shell -c /etc/odoo/odoo.conf -d "${DB}" --no-http <<PY
+company = env.ref('base.main_company')
+country = env['res.country'].search([('code', '=', '${COUNTRY}')], limit=1)
+company.write({'name': """${COMPANY}""", 'country_id': country.id})
+env.cr.commit()
+print("company:", company.name, company.country_id.code)
+PY
+
+# Step 2: install the POS/restaurant and localisation modules.
 docker compose run --rm -T odoo \
   odoo -c /etc/odoo/odoo.conf \
        -d "${DB}" \
        -i "${MODULES}" \
-       --load-language=en_AU \
        --without-demo=all \
        --stop-after-init
 
