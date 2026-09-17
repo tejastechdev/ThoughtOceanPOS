@@ -1,0 +1,32 @@
+# Production overrides. Activated on the server by COMPOSE_FILE in .env:
+#   COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.prod.yml
+# Caddy terminates HTTPS (automatic Let's Encrypt certificates for $DOMAIN) and
+# proxies to Odoo, which is no longer published on the host directly.
+services:
+  odoo:
+    ports: !reset []
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./deploy/odoo.prod.conf:/etc/odoo/odoo.conf:ro
+      - ./addons:/mnt/extra-addons
+
+  caddy:
+    image: caddy:2
+    container_name: thoughtocean_caddy
+    depends_on:
+      - odoo
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, e.g. maanspizza.duckdns.org}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

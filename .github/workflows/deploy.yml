@@ -1,0 +1,58 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax
+        run: |
+          for f in scripts/*.sh deploy/deploy.sh; do sh -n "$f"; done
+          bash -n deploy/server-setup.sh
+
+      - name: Python syntax (custom addons)
+        run: python3 -m compileall -q addons
+
+      - name: Compose config (development)
+        run: docker compose config -q
+
+      - name: Compose config (production)
+        env:
+          DOMAIN: example.com
+        run: docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml config -q
+
+      - name: Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=example.com \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2 caddy validate --config /etc/caddy/Caddyfile
+
+  deploy:
+    name: Deploy to server
+    needs: validate
+    # Enabled by setting the repository variable DEPLOY_ENABLED=true
+    # (Settings > Secrets and variables > Actions > Variables).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency: production
+    steps:
+      - name: Deploy over SSH
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'cd ~/ThoughtOceanPOS && sh deploy/deploy.sh'

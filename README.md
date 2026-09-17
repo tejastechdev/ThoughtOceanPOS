@@ -17,7 +17,7 @@ restarts. `./addons` is mounted at `/mnt/extra-addons` and is on `addons_path`
 ## Prerequisites
 
 - Docker Engine / Docker Desktop with the `docker compose` plugin
-- `curl` (used by the init script's readiness check)
+- Git Bash or any POSIX shell (Windows: Docker Desktop with the WSL 2 backend)
 
 ## Setup
 
@@ -31,8 +31,12 @@ sh scripts/init.sh
 `scripts/init.sh`:
 
 1. starts Postgres and Odoo via `docker compose up -d`
-2. creates the `thoughtocean` database (no demo data)
-3. installs `pos_restaurant` and `l10n_au` (Australian chart of accounts + 10% GST)
+2. creates the `thoughtocean` database (no demo data) and sets the company
+   name and country from `ODOO_COMPANY` / `ODOO_COUNTRY` in `.env`
+   (defaults: Maan's Pizza Shop, AU), so the matching chart of accounts,
+   currency and taxes load from the start
+3. installs `pos_restaurant`, `l10n_au` (Australian chart of accounts + 10% GST)
+   and the custom `thoughtocean_pos` addon
 4. restarts Odoo and waits until <http://localhost:8069> answers
 
 Then open <http://localhost:8069/web?db=thoughtocean> and log in with
@@ -46,6 +50,77 @@ docker compose restart odoo
 ```
 
 or from Apps in the UI (developer mode → Update Apps List → "ThoughtOcean").
+
+## Deploy to a server (Oracle Cloud free tier)
+
+Everything under [deploy/](deploy/) turns the same stack into a public HTTPS
+site: Caddy in front (automatic Let's Encrypt certificates), Odoo in
+multi-worker mode and not exposed directly, database manager disabled.
+Tested target: an Oracle Cloud "Always Free" Ampere A1 VM, but any Ubuntu
+22.04/24.04 box with a public IP works the same way.
+
+### 1. Create the VM
+
+In the Oracle Cloud console: Compute → Instances → Create.
+
+- Image: Ubuntu 24.04 (aarch64). Shape: `VM.Standard.A1.Flex`, 2 OCPU / 6 GB
+  (within the free allowance; retry later or in another availability domain if
+  you get "Out of capacity").
+- Add your SSH public key. Note the public IP once it is running.
+- Networking → the instance's subnet → Security list → add two ingress rules:
+  source `0.0.0.0/0`, TCP, destination ports `80` and `443`.
+
+### 2. Point a hostname at it
+
+Free option: [DuckDNS](https://www.duckdns.org) — create e.g.
+`maanspizza.duckdns.org` and set it to the VM's public IP. Any DNS name you
+own works too. Caddy needs the name to resolve before it can get a certificate.
+
+### 3. Run the setup script on the VM
+
+```sh
+ssh ubuntu@<public-ip>
+curl -fsSL https://raw.githubusercontent.com/tejastechdev/ThoughtOceanPOS/main/deploy/server-setup.sh \
+  | bash -s -- maanspizza.duckdns.org
+```
+
+[deploy/server-setup.sh](deploy/server-setup.sh) installs Docker, opens ports
+80/443 in the VM's firewall, clones this repo to `~/ThoughtOceanPOS`, writes
+`.env` (random database password, your domain, production compose files) and
+runs `scripts/init.sh`. About 5 minutes. Then open `https://<your-domain>`,
+log in with `admin` / `admin` and **change the admin password immediately**.
+
+### 4. Automatic deploys from GitHub (optional)
+
+Every push to `main` runs the **CI / Deploy** workflow
+([.github/workflows/deploy.yml](.github/workflows/deploy.yml)): it validates
+shell scripts, addon Python, compose files and the Caddyfile, then SSHes into
+the VM and runs [deploy/deploy.sh](deploy/deploy.sh) (git pull, pull images,
+restart, update `thoughtocean_pos`, health check). Pull requests only run the
+validation.
+
+To enable the deploy step:
+
+1. Create a dedicated key pair: `ssh-keygen -t ed25519 -f deploy_key -N ""`,
+   and append `deploy_key.pub` to `~/.ssh/authorized_keys` on the VM.
+2. In the GitHub repo, Settings → Secrets and variables → Actions:
+   - Secrets: `DEPLOY_HOST` (public IP or domain), `DEPLOY_USER` (`ubuntu`),
+     `DEPLOY_SSH_KEY` (contents of the private `deploy_key`).
+   - Variables: `DEPLOY_ENABLED` = `true`.
+
+Manual deploy at any time: `ssh ubuntu@<ip> 'cd ~/ThoughtOceanPOS && sh deploy/deploy.sh'`.
+
+### Production notes
+
+- Configuration lives in `.env` on the server (never committed).
+  `COMPOSE_FILE` there makes every `docker compose` command include
+  [deploy/docker-compose.prod.yml](deploy/docker-compose.prod.yml).
+- Odoo uses [deploy/odoo.prod.conf](deploy/odoo.prod.conf) (`proxy_mode`,
+  2 workers, `list_db = False`, only the `thoughtocean` database exposed).
+- Backups: `docker compose exec db pg_dump -U odoo thoughtocean | gzip > backup.sql.gz`
+  plus the `odoo-data` volume (filestore). Not automated yet.
+- The free VM is reclaimed by Oracle if idle for a long time; a POS in use
+  is not idle.
 
 ## Day-to-day
 

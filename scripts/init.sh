@@ -13,7 +13,7 @@ export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 
 DB="${ODOO_DB:-thoughtocean}"
-MODULES="pos_restaurant,l10n_au"
+MODULES="pos_restaurant,l10n_au,thoughtocean_pos"
 COMPANY="${ODOO_COMPANY:-Maan's Pizza Shop}"
 COUNTRY="${ODOO_COUNTRY:-AU}"
 
@@ -75,10 +75,19 @@ docker compose run --rm -T odoo \
 echo ">> Restarting Odoo so it picks up the new database"
 docker compose restart odoo
 
-echo ">> Waiting for Odoo on http://localhost:${ODOO_PORT:-8069}"
+# In production Odoo is only reachable through Caddy, so probe it from inside
+# the container rather than via a host port.
+if [ -n "${DOMAIN:-}" ]; then
+  URL="https://${DOMAIN}"
+else
+  URL="http://localhost:${ODOO_PORT:-8069}"
+fi
+echo ">> Waiting for Odoo"
 for _ in $(seq 1 60); do
-  if curl -fsS "http://localhost:${ODOO_PORT:-8069}/web/login" >/dev/null 2>&1; then
-    echo ">> Odoo is up: http://localhost:${ODOO_PORT:-8069}/web?db=${DB}  (admin / admin)"
+  if docker compose exec -T odoo python3 -c \
+       'import urllib.request; urllib.request.urlopen("http://localhost:8069/web/login", timeout=5)' \
+       >/dev/null 2>&1; then
+    echo ">> Odoo is up: ${URL}/web?db=${DB}  (admin / admin)"
     exit 0
   fi
   sleep 2

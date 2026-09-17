@@ -1,0 +1,19 @@
+# Reverse proxy for Odoo. Caddy obtains and renews the TLS certificate itself.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Odoo runs with workers > 0 in production, so websockets (POS/chat
+	# notifications) are served by the gevent process on port 8072.
+	@websocket path /websocket /websocket/*
+	reverse_proxy @websocket odoo:8072
+
+	reverse_proxy odoo:8069
+
+	request_body {
+		max_size 64MB
+	}
+
+	log {
+		output stdout
+	}
+}
