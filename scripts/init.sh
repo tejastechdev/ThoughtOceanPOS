@@ -6,6 +6,10 @@
 #        ODOO_DB=other scripts/init.sh
 set -eu
 
+# Git Bash on Windows rewrites POSIX paths such as /etc/odoo/odoo.conf into
+# Windows paths before passing them to docker; disable that (no-op elsewhere).
+export MSYS_NO_PATHCONV=1
+
 cd "$(dirname "$0")/.."
 
 DB="${ODOO_DB:-thoughtocean}"
