@@ -74,12 +74,9 @@ thoughtocean_pos/
 
 ```sh
 docker compose run --rm odoo odoo -c /etc/odoo/odoo.conf -d test_thoughtocean \
-  --db-filter "^test_thoughtocean$" \
+  --db-filter "^test_thoughtocean$"
   -i thoughtocean_pos --test-enable --test-tags /thoughtocean_pos --stop-after-init
 ```
-
-The `--db-filter` override is needed because `odoo.conf` pins web requests to
-the `thoughtocean` database; without it the webhook tests hit the wrong DB.
 
 ## Licence
 

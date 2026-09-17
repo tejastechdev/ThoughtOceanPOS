@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="uber_eats_order_view_list" model="ir.ui.view">
+        <field name="name">uber.eats.order.list</field>
+        <field name="model">uber.eats.order</field>
+        <field name="arch" type="xml">
+            <list default_order="create_date desc" decoration-danger="state == 'error'" decoration-muted="state in ('denied', 'cancelled')" decoration-success="state == 'accepted'">
+                <header>
+                    <button name="action_create_test_order" type="object" string="Create test order" display="always" class="btn-secondary"/>
+                </header>
+                <field name="create_date" string="Received"/>
+                <field name="display_id"/>
+                <field name="pos_config_id"/>
+                <field name="order_type"/>
+                <field name="eater_name"/>
+                <field name="ready_at"/>
+                <field name="amount_uber" sum="Total"/>
+                <field name="pos_order_id"/>
+                <field name="state" widget="badge" decoration-success="state == 'accepted'" decoration-danger="state == 'error'" decoration-warning="state == 'received'"/>
+                <field name="simulated" optional="hide"/>
+                <field name="uber_order_id" optional="hide"/>
+                <field name="attempts" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="uber_eats_order_view_form" model="ir.ui.view">
+        <field name="name">uber.eats.order.form</field>
+        <field name="model">uber.eats.order</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_retry" type="object" string="Retry" class="btn-primary" invisible="state not in ('error', 'denied')"/>
+                    <button name="action_view_pos_order" type="object" string="Open POS order" invisible="not pos_order_id"/>
+                    <field name="state" widget="statusbar" statusbar_visible="received,accepted"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="display_id" placeholder="Uber display ID"/></h1>
+                    </div>
+                    <div class="alert alert-danger" role="alert" invisible="not error_message">
+                        <field name="error_message" nolabel="1"/>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="uber_order_id"/>
+                            <field name="store_id"/>
+                            <field name="pos_config_id"/>
+                            <field name="pos_order_id"/>
+                            <field name="simulated"/>
+                        </group>
+                        <group>
+                            <field name="order_type"/>
+                            <field name="eater_name"/>
+                            <field name="placed_at"/>
+                            <field name="ready_at"/>
+                            <field name="amount_uber"/>
+                            <field name="amount_pos"/>
+                            <field name="attempts"/>
+                        </group>
+                    </group>
+                    <group string="Special instructions" invisible="not special_instructions">
+                        <field name="special_instructions" nolabel="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Order details (Uber)">
+                            <field name="order_payload" widget="ace" options="{'mode': 'json'}"/>
+                        </page>
+                        <page string="Webhook event">
+                            <field name="webhook_payload" widget="ace" options="{'mode': 'json'}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="uber_eats_order_view_search" model="ir.ui.view">
+        <field name="name">uber.eats.order.search</field>
+        <field name="model">uber.eats.order</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="display_id"/>
+                <field name="uber_order_id"/>
+                <field name="eater_name"/>
+                <filter name="needs_attention" string="Needs attention" domain="[('state', 'in', ('received', 'error'))]"/>
+                <filter name="accepted" string="Accepted" domain="[('state', '=', 'accepted')]"/>
+                <filter name="today" string="Today" domain="[('create_date', '>=', 'today')]"/>
+                <separator/>
+                <filter name="real" string="Real orders" domain="[('simulated', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_pos" string="Point of Sale" context="{'group_by': 'pos_config_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_uber_eats_orders" model="ir.actions.act_window">
+        <field name="name">Uber Eats Orders</field>
+        <field name="res_model">uber.eats.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="uber_eats_order_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No Uber Eats orders yet</p>
+            <p>
+                Orders placed on Uber Eats appear here and in the point of sale as soon as
+                Uber sends them. Use <b>Create test order</b> to simulate one.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_uber_eats_orders" name="Uber Eats Orders" parent="point_of_sale.menu_point_of_sale"
+              action="action_uber_eats_orders" sequence="15"/>
+</odoo>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_uber_eats" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.uber.eats</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='pos_payment_section']" position="after">
+                <block title="Uber Eats" id="uber_eats_section">
+                    <setting id="uber_eats_pos_setting" string="Receive Uber Eats orders" help="Orders placed on Uber Eats are created in this point of sale, paid with an 'Uber Eats' payment method, and accepted on Uber automatically.">
+                        <field name="pos_uber_eats_enabled"/>
+                        <div class="content-group mt16" invisible="not pos_uber_eats_enabled">
+                            <div class="row">
+                                <label for="pos_uber_eats_store_id" class="col-lg-4 o_light_label"/>
+                                <field name="pos_uber_eats_store_id"/>
+                            </div>
+                            <div class="row">
+                                <label for="pos_uber_eats_order_state" class="col-lg-4 o_light_label"/>
+                                <field name="pos_uber_eats_order_state"/>
+                            </div>
+                            <div class="row">
+                                <label for="pos_uber_eats_fallback_product_id" class="col-lg-4 o_light_label"/>
+                                <field name="pos_uber_eats_fallback_product_id"/>
+                            </div>
+                            <div class="row">
+                                <field name="pos_uber_eats_deny_when_closed" class="col-lg-1"/>
+                                <label for="pos_uber_eats_deny_when_closed" class="col-lg-8"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting id="uber_eats_api_setting" string="Uber Eats API" help="Credentials of your Uber Eats developer application (shared by all points of sale). Register the webhook URL below in the application's settings.">
+                        <div class="content-group">
+                            <div class="row">
+                                <label for="uber_client_id" class="col-lg-4 o_light_label"/>
+                                <field name="uber_client_id"/>
+                            </div>
+                            <div class="row">
+                                <label for="uber_client_secret" class="col-lg-4 o_light_label"/>
+                                <field name="uber_client_secret" password="True"/>
+                            </div>
+                            <div class="row">
+                                <label for="uber_webhook_url" class="col-lg-4 o_light_label"/>
+                                <field name="uber_webhook_url" readonly="1"/>
+                            </div>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -51,6 +51,22 @@ docker compose restart odoo
 
 or from Apps in the UI (developer mode → Update Apps List → "ThoughtOcean").
 
+## Uber Eats orders
+
+`thoughtocean_pos` receives Uber Eats orders: Uber calls the webhook
+`https://<your-domain>/uber_eats/webhook`, the order is created as a paid,
+take-away POS order in the open session, accepted on Uber and shown on the POS
+screen. Configure it under Point of Sale → Configuration → Settings → Uber Eats
+(client ID/secret from your Uber Eats developer application, then enable it on
+the point of sale) and try **Create test order** under Point of Sale → Orders →
+Uber Eats Orders. Details and item-matching rules:
+[addons/thoughtocean_pos/README.md](addons/thoughtocean_pos/README.md).
+
+Getting API access: Uber Eats integrations go through the
+[Uber Developer portal](https://developer.uber.com) (create an app, request the
+Eats Marketplace `eats.order` / `eats.store` scopes, and link your store); Uber
+approves POS integrations per merchant, so start that request early.
+
 ## Deploy to a server (Oracle Cloud free tier)
 
 Everything under [deploy/](deploy/) turns the same stack into a public HTTPS
